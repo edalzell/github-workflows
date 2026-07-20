@@ -1,11 +1,14 @@
 name: Release
 
 # Reusable release workflow shared across the transformstudios and edalzell packages.
-# Call it from a package repo with:
+# Single-phase flow, for repos whose `main` is NOT protected against direct pushes. Repos with a
+# ruleset that forbids direct pushes use release-prepare.yml + release-publish.yml instead.
+#
+# Pin the `uses:` to a commit SHA (not @v1); keep the version in a trailing comment. Call it with:
 #
 #   jobs:
 #     release:
-#       uses: edalzell/github-workflows/.github/workflows/release.yml@v1
+#       uses: edalzell/github-workflows/.github/workflows/release.yml@<sha> # v1
 #       permissions:
 #         contents: write        # required: this workflow commits and publishes
 #       with:

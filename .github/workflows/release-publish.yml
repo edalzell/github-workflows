@@ -1,0 +1,100 @@
+name: Release Publish
+
+# Phase 2 of the PR-gated release. Runs when a release/<tag> PR is merged. Optionally builds and
+# attaches a compiled asset bundle, then flips the draft release to published. Because the release
+# PR is now merged, main's HEAD is the (GitHub-signed) squash commit that includes the CHANGELOG,
+# and `target_commitish=main` makes the tag land on it.
+#
+# The caller guards this on the merge + label; see the example below.
+#
+#   on:
+#     pull_request:
+#       types: [closed]
+#   jobs:
+#     publish:
+#       if: >-
+#         github.event.pull_request.merged == true &&
+#         contains(github.event.pull_request.labels.*.name, 'release')
+#       uses: edalzell/github-workflows/.github/workflows/release-publish.yml@<sha> # v1
+#       permissions:
+#         contents: write
+#       with:
+#         upload_assets: true            # only repos that ship a compiled dist/
+#         composer_install: true         # only repos whose asset build needs PHP deps
+#         asset_working_dir: resources    # dir containing the `dist` folder to tar
+
+on:
+  workflow_call:
+    inputs:
+      upload_assets:
+        description: Build a compiled asset bundle and attach it to the release
+        type: boolean
+        default: false
+      composer_install:
+        description: Run `composer install` before building assets (PHP packages)
+        type: boolean
+        default: false
+      asset_working_dir:
+        description: Directory containing the `dist` folder to tar (relative to repo root)
+        type: string
+        default: "."
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Find draft release
+        id: draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # Prefer the tag named by the release branch (release/<tag>); fall back to the latest draft.
+          # jq reads the wanted tag from $TAG in the environment (gh --jq takes no --arg).
+          if [ "${HEAD_REF#release/}" != "$HEAD_REF" ]; then
+            export TAG="${HEAD_REF#release/}"
+            draft=$(gh api "repos/${GITHUB_REPOSITORY}/releases" \
+              --jq 'map(select(.draft and .tag_name == env.TAG))[0]')
+          else
+            draft=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq 'map(select(.draft))[0]')
+          fi
+          if [ "$draft" = "null" ] || [ -z "$draft" ]; then
+            echo "No matching draft release found" >&2
+            exit 1
+          fi
+          {
+            echo "id=$(jq -r .id <<<"$draft")"
+            echo "tag_name=$(jq -r .tag_name <<<"$draft")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install Composer dependencies
+        if: ${{ inputs.composer_install }}
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Build and upload assets
+        if: ${{ inputs.upload_assets }}
+        working-directory: ${{ inputs.asset_working_dir }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm install
+          npm run production
+          tar -czvf dist.tar.gz dist
+          # Attach to the still-draft release so the published release is fully built.
+          gh release upload "${{ steps.draft.outputs.tag_name }}" dist.tar.gz --clobber
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Patch by id; -F sends a JSON boolean. target_commitish=main pins the tag to the merged
+          # commit (which includes the CHANGELOG), not a stale commitish from when the draft was made.
+          gh api --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/releases/${{ steps.draft.outputs.id }}" \
+            -F draft=false \
+            -f target_commitish=main

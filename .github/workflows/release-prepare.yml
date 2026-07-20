@@ -1,0 +1,76 @@
+name: Release Prepare
+
+# Phase 1 of the PR-gated release, for repos whose `main` is protected by a ruleset that forbids
+# direct pushes. Updates CHANGELOG.md on a `release/<tag>` branch and opens a labelled PR to main.
+# A maintainer then reviews and squash-merges it, which triggers release-publish.yml.
+#
+#   jobs:
+#     prepare:
+#       uses: edalzell/github-workflows/.github/workflows/release-prepare.yml@<sha> # v1
+#       permissions:
+#         contents: write
+#         pull-requests: write
+
+on:
+  workflow_call:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Get draft release
+        id: draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The releases endpoint returns newest first, so the first draft is the latest.
+          draft=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq 'map(select(.draft))[0]')
+          if [ "$draft" = "null" ] || [ -z "$draft" ]; then
+            echo "No draft release found" >&2
+            exit 1
+          fi
+          # Randomized, since a release body could itself contain a fixed delimiter like EOF.
+          delim="body_$(openssl rand -hex 8)"
+          {
+            echo "tag_name=$(jq -r .tag_name <<<"$draft")"
+            echo "body<<${delim}"
+            jq -r .body <<<"$draft"
+            echo "${delim}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update changelog
+        uses: stefanzweifel/changelog-updater-action@a938690fad7edf25368f37e43a1ed1b34303eb36 # v1.12.0
+        with:
+          latest-version: ${{ steps.draft.outputs.tag_name }}
+          release-notes: ${{ steps.draft.outputs.body }}
+
+      - name: Open release PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.draft.outputs.tag_name }}
+          BODY: ${{ steps.draft.outputs.body }}
+        run: |
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "CHANGELOG.md unchanged — nothing to release" >&2
+            exit 1
+          fi
+          branch="release/${TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add CHANGELOG.md
+          git commit -m "Update CHANGELOG for ${TAG}"
+          git push --force-with-lease -u origin "$branch"
+          # Ensure the label the publish workflow filters on exists.
+          gh label create release --color 0e8a16 --description "Release PR" --force
+          printf '%s\n' "$BODY" > /tmp/pr-body.md
+          gh pr create --base main --head "$branch" \
+            --label release \
+            --title "Release ${TAG}" \
+            --body-file /tmp/pr-body.md
