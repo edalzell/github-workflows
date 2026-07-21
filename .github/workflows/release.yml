@@ -1,0 +1,104 @@
+name: Release
+
+# Reusable release workflow shared across the transformstudios and edalzell packages.
+# Single-phase flow, for repos whose `main` is NOT protected against direct pushes. Repos with a
+# ruleset that forbids direct pushes use release-prepare.yml + release-publish.yml instead.
+#
+# Pin the `uses:` to a commit SHA (not @v1); keep the version in a trailing comment. Call it with:
+#
+#   jobs:
+#     release:
+#       uses: edalzell/github-workflows/.github/workflows/release.yml@<sha> # v1
+#       permissions:
+#         contents: write        # required: this workflow commits and publishes
+#       with:
+#         upload_assets: true     # only repos that ship a compiled dist/
+#         composer_install: true  # only repos whose asset build needs PHP deps
+#         asset_working_dir: resources  # dir containing the `dist` folder to tar
+#
+# GITHUB_TOKEN is passed through automatically; no `secrets:` block is needed.
+
+on:
+  workflow_call:
+    inputs:
+      upload_assets:
+        description: Build a compiled asset bundle and attach it to the release
+        type: boolean
+        default: false
+      composer_install:
+        description: Run `composer install` before building assets (PHP packages)
+        type: boolean
+        default: false
+      asset_working_dir:
+        description: Directory containing the `dist` folder to tar (relative to repo root)
+        type: string
+        default: "."
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Get draft release
+        id: draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The releases endpoint returns newest first, so the first draft is the latest.
+          draft=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq 'map(select(.draft))[0]')
+          if [ "$draft" = "null" ] || [ -z "$draft" ]; then
+            echo "No draft release found" >&2
+            exit 1
+          fi
+          # Randomized, since a release body could itself contain a fixed delimiter like EOF.
+          delim="body_$(openssl rand -hex 8)"
+          {
+            echo "id=$(jq -r .id <<<"$draft")"
+            echo "tag_name=$(jq -r .tag_name <<<"$draft")"
+            echo "body<<${delim}"
+            jq -r .body <<<"$draft"
+            echo "${delim}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install Composer dependencies
+        if: ${{ inputs.composer_install }}
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Build and upload assets
+        if: ${{ inputs.upload_assets }}
+        working-directory: ${{ inputs.asset_working_dir }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm install
+          npm run production
+          tar -czvf dist.tar.gz dist
+          # Upload against the draft by its tag; assets attach before the release goes public.
+          gh release upload "${{ steps.draft.outputs.tag_name }}" dist.tar.gz --clobber
+
+      - name: Update changelog
+        uses: stefanzweifel/changelog-updater-action@a938690fad7edf25368f37e43a1ed1b34303eb36 # v1.12.0
+        with:
+          latest-version: ${{ steps.draft.outputs.tag_name }}
+          release-notes: ${{ steps.draft.outputs.body }}
+
+      - name: Commit updated changelog
+        uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d # v7.2.0
+        with:
+          branch: main
+          commit_message: Update CHANGELOG
+          file_pattern: CHANGELOG.md
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Patch by id rather than `gh release edit <tag>`: a draft has no git tag to look up.
+          # -F sends a JSON boolean; -f would send the string "false".
+          gh api --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/releases/${{ steps.draft.outputs.id }}" \
+            -F draft=false
