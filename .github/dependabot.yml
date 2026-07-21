@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # Keep the third-party actions used inside the reusable workflows up to date.
+  # Grouped so a batch of bumps arrives as a single PR.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
