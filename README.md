@@ -8,14 +8,17 @@ called from within its own owner.
 ## Pinning
 
 Pin every `uses:` — including references to the workflows in **this** repo — to a full commit SHA,
-with the version in a trailing comment. Do **not** track the moving `@v1` tag from callers:
+with the **specific released version** in a trailing comment:
 
 ```yaml
-uses: edalzell/github-workflows/.github/workflows/release.yml@d34db33… # v1
+uses: edalzell/github-workflows/.github/workflows/release.yml@d3446ce… # v1.0.0
 ```
 
-`v1` still exists as a human-facing pointer to the latest good commit; bump the pinned SHA
-deliberately.
+The version in the comment is what lets Dependabot recognise the current version and open a PR
+bumping both the SHA and the comment when a new release ships. Enable the `github-actions`
+ecosystem in each caller repo's `.github/dependabot.yml` (grouped, so bumps arrive as one PR).
+
+Do not reference a moving major tag like `@v1` — nothing here resolves one.
 
 ## Which workflow to use
 
@@ -100,7 +103,19 @@ Both `release.yml` and `release-publish.yml` accept:
 
 `GITHUB_TOKEN` is passed through automatically; no `secrets:` block is needed.
 
-## Versioning
+## Releasing this repo
 
-A breaking change to any workflow gets a new major tag (`v2`); `v1` is only moved forward for
-backward-compatible changes.
+This repo releases itself with its own PR-gated workflows (`cut-release-prepare.yml` /
+`cut-release-publish.yml`), pinned to the previously released SHA — so the flow the package repos
+depend on is exercised here first.
+
+1. Land changes via a **labelled PR** (`feature`, `fix`, `chore`, …). Release Drafter uses those
+   labels to compute the next version and accumulate the notes.
+2. Run **Cut Release** (`workflow_dispatch`). It opens a `release/<tag>` PR updating `CHANGELOG.md`.
+3. Squash-merge that PR. Cut Release Publish then publishes the draft and creates the tag.
+4. Dependabot opens bump PRs in the caller repos within a week.
+
+Because the version comes from PR labels, there are no version numbers to type by hand.
+
+**Bootstrapping:** a release is cut using the *previous* release of these workflows. If a broken
+`release-prepare`/`release-publish` ever ships, fix the following release by hand.

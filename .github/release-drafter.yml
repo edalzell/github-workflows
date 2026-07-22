@@ -1,0 +1,43 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+# The release PR itself carries the `release` label; keep it out of the next draft.
+exclude-labels:
+  - 'release'
+categories:
+  - title: '🚀 New'
+    labels:
+      - 'feature'
+      - 'enhancement'
+  - title: '🐛 Fixed'
+    labels:
+      - 'fix'
+      - 'bugfix'
+      - 'bug'
+  - title: '🔧 Improved'
+    labels:
+      - 'change'
+      - 'improve'
+      - 'improvement'
+  - title: '🧰 Maintenance'
+    label: 'chore'
+change-template: '- $TITLE [@$AUTHOR](https://github.com/$AUTHOR) (#$NUMBER)'
+change-title-escapes: '\<*_&'
+version-resolver:
+  major:
+    labels:
+      - 'major'
+  minor:
+    labels:
+      - 'feature'
+      - 'enhancement'
+      - 'change'
+      - 'improve'
+      - 'improvement'
+  patch:
+    labels:
+      - 'fix'
+      - 'bugfix'
+      - 'bug'
+  default: patch
+template: |
+  $CHANGES

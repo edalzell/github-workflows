@@ -1,0 +1,20 @@
+name: Release Drafter
+
+# Keeps a draft release up to date as labelled PRs merge. The draft supplies the version number
+# and notes that the Cut Release workflows turn into an actual release.
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  update_release_draft:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: release-drafter/release-drafter@eada3c96a64734dd381cfbda23511034e328ddb0 # v7.6.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
