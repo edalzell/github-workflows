@@ -86,6 +86,11 @@ through a PR instead of a direct push:
    label) — optionally builds/attaches assets, then publishes the draft with `target_commitish=main`
    so the tag lands on the merged commit (which now includes the CHANGELOG).
 
+`release-prepare` opens the PR with a **GitHub App token**, not `GITHUB_TOKEN` — so you do **not**
+enable the repo-wide "Allow GitHub Actions to create and approve pull requests" setting. See
+[GitHub App setup](#github-app-setup) for the one-time App + secrets. The caller passes the App's
+credentials as secrets:
+
 ```yaml
 # .github/workflows/release-prepare.yml
 name: Release Prepare
@@ -96,7 +101,9 @@ jobs:
     uses: edalzell/github-workflows/.github/workflows/release-prepare.yml@<sha> # v1.x.y
     permissions:
       contents: write
-      pull-requests: write
+    secrets:
+      app_id: ${{ secrets.RELEASE_APP_ID }}
+      app_private_key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 ```
 
 ```yaml
@@ -114,6 +121,32 @@ jobs:
     permissions:
       contents: write
 ```
+
+## GitHub App setup
+
+The PR-gated flow needs to open a PR from a workflow. Rather than enable the repo-wide "Allow
+GitHub Actions to create and approve pull requests" setting (which also lets Actions *approve* PRs),
+`release-prepare` uses a **GitHub App** token scoped to the one repo, minted fresh each run and
+expiring in an hour. One App serves every repo.
+
+**One-time, create the App** (Settings → Developer settings → GitHub Apps → New GitHub App):
+- Permissions → Repository: **Contents: Read and write**, **Pull requests: Read and write**. Nothing else.
+- Uncheck **Webhook → Active** (not needed).
+- Where can it be installed: "Only on this account".
+- Create it, then **Generate a private key** (downloads a `.pem`) and note the **App ID**.
+- **Install** the App (left sidebar → Install App) on the repos that will use the PR-gated flow.
+
+**Per repo** (or per org, for org-owned repos), add two Actions secrets:
+- `RELEASE_APP_ID` — the App ID.
+- `RELEASE_APP_PRIVATE_KEY` — the full contents of the `.pem`.
+
+```bash
+gh secret set RELEASE_APP_ID          --repo <owner>/<repo> --body "123456"
+gh secret set RELEASE_APP_PRIVATE_KEY --repo <owner>/<repo> < app-private-key.pem
+```
+
+The App only grants Contents + Pull requests write on the repos it's installed on, and it cannot
+approve PRs — so it doesn't weaken review gates the way the account-wide setting would.
 
 ## Inputs (asset-shipping repos)
 
