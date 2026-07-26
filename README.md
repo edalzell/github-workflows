@@ -127,14 +127,17 @@ jobs:
 The PR-gated flow needs to open a PR from a workflow. Rather than enable the repo-wide "Allow
 GitHub Actions to create and approve pull requests" setting (which also lets Actions *approve* PRs),
 `release-prepare` uses a **GitHub App** token scoped to the one repo, minted fresh each run and
-expiring in an hour. One App serves every repo.
+expiring in an hour.
 
 **One-time, create the App** (Settings → Developer settings → GitHub Apps → New GitHub App):
 - Permissions → Repository: **Contents: Read and write**, **Pull requests: Read and write**. Nothing else.
 - Uncheck **Webhook → Active** (not needed).
-- Where can it be installed: "Only on this account".
+- Where can it be installed: since the callers span two owners (`edalzell` and `transformstudios`),
+  choose **"Any account"** so one App can install on both. (Pick "Only on this account" if you'll
+  only ever use it on that one owner's repos, or create a separate App per owner.)
 - Create it, then **Generate a private key** (downloads a `.pem`) and note the **App ID**.
-- **Install** the App (left sidebar → Install App) on the repos that will use the PR-gated flow.
+- **Install** the App (left sidebar → Install App) on each account/org, selecting the repos that
+  will use the PR-gated flow.
 
 **Per repo** (or per org, for org-owned repos), add two Actions secrets:
 - `RELEASE_APP_ID` — the App ID.
