@@ -21,7 +21,7 @@ on:
   workflow_call:
     secrets:
       release_token:
-        description: Fine-grained PAT (Contents + Issues + Pull requests write) used to open the release PR
+        description: Fine-grained PAT (Contents + Pull requests write) used to open the release PR
         required: true
 
 jobs:
@@ -79,10 +79,9 @@ jobs:
           git add CHANGELOG.md
           git commit -m "Update CHANGELOG for ${TAG}"
           git push --force-with-lease -u origin "$branch"
-          # Ensure the label the publish workflow filters on exists.
-          gh label create release --color 0e8a16 --description "Release PR" --force
           printf '%s\n' "$BODY" > /tmp/pr-body.md
+          # Release Publish recognises this PR by its release/* branch, so no label is needed
+          # (which also means the token needs no Issues permission).
           gh pr create --base main --head "$branch" \
-            --label release \
             --title "Release ${TAG}" \
             --body-file /tmp/pr-body.md

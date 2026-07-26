@@ -5,7 +5,7 @@ name: Release Publish
 # PR is now merged, main's HEAD is the (GitHub-signed) squash commit that includes the CHANGELOG,
 # and `target_commitish=main` makes the tag land on it.
 #
-# The caller guards this on the merge + label; see the example below.
+# The caller guards this on the merge + the release/* branch; see the example below.
 #
 #   on:
 #     pull_request:
@@ -14,8 +14,8 @@ name: Release Publish
 #     publish:
 #       if: >-
 #         github.event.pull_request.merged == true &&
-#         contains(github.event.pull_request.labels.*.name, 'release')
-#       uses: edalzell/github-workflows/.github/workflows/release-publish.yml@<sha> # v1
+#         startsWith(github.event.pull_request.head.ref, 'release/')
+#       uses: edalzell/github-workflows/.github/workflows/release-publish.yml@<sha> # v1.x.y
 #       permissions:
 #         contents: write
 #       with:
