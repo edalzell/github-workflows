@@ -22,12 +22,39 @@ Do not reference a moving major tag like `@v1` — nothing here resolves one.
 
 ## Which workflow to use
 
-| Repo's `main` | Use |
-| --- | --- |
-| Not protected against direct pushes | `release.yml` (single-phase) |
-| Protected by a ruleset (no direct pushes) | `release-prepare.yml` + `release-publish.yml` (PR-gated) |
+Every package repo wires up **Release Draft** plus one release flow:
 
-All three read the latest draft release (maintained by release-drafter) for the version and notes.
+| Piece | Workflow(s) | Trigger |
+| --- | --- | --- |
+| Keep the draft release current | `release-draft.yml` | every merged PR |
+| Release — `main` not protected | `release.yml` (single-phase) | manual |
+| Release — `main` protected by a ruleset | `release-prepare.yml` + `release-publish.yml` (PR-gated) | manual + PR merge |
+
+The release flow reads the draft release for the version and notes. Each repo still provides its own
+`.github/release-drafter.yml` config.
+
+## `release-draft.yml` (all repos)
+
+Runs [release-drafter](https://github.com/release-drafter/release-drafter) on every merged PR to
+keep a draft release current, and **skips the `release` PR** so it never races the (immutable)
+release that `release-publish.yml` just published.
+
+```yaml
+# .github/workflows/create-draft-release.yml
+name: Release Drafter
+on:
+  pull_request:
+    types: [closed]
+jobs:
+  draft:
+    uses: edalzell/github-workflows/.github/workflows/release-draft.yml@<sha> # v1.x.y
+    permissions:
+      contents: write
+      pull-requests: write
+```
+
+Add `exclude-labels: ['release']` to the repo's `.github/release-drafter.yml` so the release PR
+itself is not rolled into the next draft.
 
 ## `release.yml` (single-phase)
 
@@ -41,7 +68,7 @@ on:
   workflow_dispatch:
 jobs:
   release:
-    uses: edalzell/github-workflows/.github/workflows/release.yml@<sha> # v1
+    uses: edalzell/github-workflows/.github/workflows/release.yml@<sha> # v1.x.y
     permissions:
       contents: write
 ```
@@ -66,7 +93,7 @@ on:
   workflow_dispatch:
 jobs:
   prepare:
-    uses: edalzell/github-workflows/.github/workflows/release-prepare.yml@<sha> # v1
+    uses: edalzell/github-workflows/.github/workflows/release-prepare.yml@<sha> # v1.x.y
     permissions:
       contents: write
       pull-requests: write
@@ -83,13 +110,10 @@ jobs:
     if: >-
       github.event.pull_request.merged == true &&
       contains(github.event.pull_request.labels.*.name, 'release')
-    uses: edalzell/github-workflows/.github/workflows/release-publish.yml@<sha> # v1
+    uses: edalzell/github-workflows/.github/workflows/release-publish.yml@<sha> # v1.x.y
     permissions:
       contents: write
 ```
-
-Add `exclude-labels: ['release']` to the repo's `.github/release-drafter.yml` so the release PR
-itself is not rolled into the next draft.
 
 ## Inputs (asset-shipping repos)
 
@@ -105,35 +129,15 @@ Both `release.yml` and `release-publish.yml` accept:
 
 ## Releasing this repo
 
-This repo releases itself with its own PR-gated workflows (`cut-release-prepare.yml` /
-`cut-release-publish.yml`), pinned to the previously released SHA — so the flow the package repos
-depend on is exercised here first. You never type a version number; it comes from PR labels.
+This repo is a small library, so it releases with a single **Tag Release** workflow rather than the
+PR-gated flow it ships (that flow exists to solve branch protection on the package repos, which is
+exercised there). To cut a release:
 
-### Steps
+1. Merge your changes to `main` (ordinary PRs).
+2. Actions → **Tag Release** → *Run workflow*, and enter the new version (e.g. `v1.1.0`). It tags
+   the current commit and publishes a GitHub Release with generated notes.
+3. Dependabot opens grouped bump PRs in the caller repos within a week, moving their pinned SHA (and
+   the `# vX.Y.Z` comment) to the new version. Squash-merge those.
 
-1. **Land your change via a labelled PR.** Open a PR and apply a label (see the table below), then
-   merge it. **Release Drafter** runs on merge and updates the draft release with the next version
-   and a notes entry.
-2. **Run *Cut Release*** — Actions → *Cut Release* → *Run workflow* (on `main`). It reads the draft
-   and opens a `release/<tag>` PR that updates `CHANGELOG.md`. The PR is labelled `release`.
-3. **Squash-merge the release PR.** *Cut Release Publish* fires on the merge, publishes the draft
-   release, and creates the `vX.Y.Z` tag on the merged commit.
-4. **(Automatic) Dependabot** opens grouped bump PRs in the caller repos within a week, moving them
-   to the new version. Squash-merge those too.
-
-### Label → version bump
-
-Release Drafter computes the next version from the labels on the merged PRs since the last release
-(the highest bump wins):
-
-| Label(s) | Bump | Use for |
-| --- | --- | --- |
-| `major` | `v1.4.2 → v2.0.0` | breaking change to a workflow's inputs or behaviour |
-| `feature`, `enhancement`, `change`, `improve`, `improvement` | minor `→ v1.5.0` | new input or capability |
-| `fix`, `bugfix`, `bug` | patch `→ v1.4.3` | bug fix |
-| `chore` | patch (the default) | docs, tooling, dependency bumps |
-
-The `release` label is reserved for the PR that *Cut Release* opens and is excluded from the draft.
-
-**Bootstrapping:** a release is cut using the *previous* release of these workflows. If a broken
-`release-prepare`/`release-publish` ever ships, fix the following release by hand.
+Use plain semver bumps: patch for fixes/docs, minor for new inputs or workflows, major for breaking
+changes to a workflow's interface.
