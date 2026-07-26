@@ -112,13 +112,13 @@ on:
     types: [closed]
 jobs:
   publish:
-    if: >-
-      github.event.pull_request.merged == true &&
-      startsWith(github.event.pull_request.head.ref, 'release/')
     uses: edalzell/github-workflows/.github/workflows/release-publish.yml@<sha> # v1.x.y
     permissions:
       contents: write
 ```
+
+The merge + `release/*` branch guard lives inside `release-publish.yml`, so the caller just wires
+the `pull_request` trigger — no `if` needed (same as `release-draft`).
 
 ## Release token
 
