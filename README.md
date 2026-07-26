@@ -107,15 +107,33 @@ Both `release.yml` and `release-publish.yml` accept:
 
 This repo releases itself with its own PR-gated workflows (`cut-release-prepare.yml` /
 `cut-release-publish.yml`), pinned to the previously released SHA — so the flow the package repos
-depend on is exercised here first.
+depend on is exercised here first. You never type a version number; it comes from PR labels.
 
-1. Land changes via a **labelled PR** (`feature`, `fix`, `chore`, …). Release Drafter uses those
-   labels to compute the next version and accumulate the notes.
-2. Run **Cut Release** (`workflow_dispatch`). It opens a `release/<tag>` PR updating `CHANGELOG.md`.
-3. Squash-merge that PR. Cut Release Publish then publishes the draft and creates the tag.
-4. Dependabot opens bump PRs in the caller repos within a week.
+### Steps
 
-Because the version comes from PR labels, there are no version numbers to type by hand.
+1. **Land your change via a labelled PR.** Open a PR and apply a label (see the table below), then
+   merge it. **Release Drafter** runs on merge and updates the draft release with the next version
+   and a notes entry.
+2. **Run *Cut Release*** — Actions → *Cut Release* → *Run workflow* (on `main`). It reads the draft
+   and opens a `release/<tag>` PR that updates `CHANGELOG.md`. The PR is labelled `release`.
+3. **Squash-merge the release PR.** *Cut Release Publish* fires on the merge, publishes the draft
+   release, and creates the `vX.Y.Z` tag on the merged commit.
+4. **(Automatic) Dependabot** opens grouped bump PRs in the caller repos within a week, moving them
+   to the new version. Squash-merge those too.
+
+### Label → version bump
+
+Release Drafter computes the next version from the labels on the merged PRs since the last release
+(the highest bump wins):
+
+| Label(s) | Bump | Use for |
+| --- | --- | --- |
+| `major` | `v1.4.2 → v2.0.0` | breaking change to a workflow's inputs or behaviour |
+| `feature`, `enhancement`, `change`, `improve`, `improvement` | minor `→ v1.5.0` | new input or capability |
+| `fix`, `bugfix`, `bug` | patch `→ v1.4.3` | bug fix |
+| `chore` | patch (the default) | docs, tooling, dependency bumps |
+
+The `release` label is reserved for the PR that *Cut Release* opens and is excluded from the draft.
 
 **Bootstrapping:** a release is cut using the *previous* release of these workflows. If a broken
 `release-prepare`/`release-publish` ever ships, fix the following release by hand.
