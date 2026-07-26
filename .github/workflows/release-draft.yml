@@ -1,8 +1,8 @@
 name: Release Draft
 
-# Reusable: keeps a package repo's draft release current as labelled PRs merge. Skips the release
-# PR itself (handled by Release Publish) so it never races an immutable, already-published release.
-# Each caller still provides its own .github/release-drafter.yml config.
+# Reusable: keeps a package repo's draft release current as PRs merge. Skips the release PR itself
+# (recognised by its release/* branch, handled by Release Publish) so it never races an immutable,
+# already-published release. Each caller still provides its own .github/release-drafter.yml config.
 #
 #   on:
 #     pull_request:
@@ -19,11 +19,11 @@ on:
 
 jobs:
   draft:
-    # Skip the release PR: Release Publish has already published (and made immutable) that version,
-    # so a drafter update would fail trying to change an immutable release.
+    # Skip the release PR (its branch is release/*): Release Publish has already published (and made
+    # immutable) that version, so a drafter update would fail against an immutable release.
     if: >-
       github.event.pull_request.merged == true &&
-      !contains(github.event.pull_request.labels.*.name, 'release')
+      !startsWith(github.event.pull_request.head.ref, 'release/')
     runs-on: ubuntu-latest
     permissions:
       contents: write

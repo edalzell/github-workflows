@@ -53,8 +53,8 @@ jobs:
       pull-requests: write
 ```
 
-Add `exclude-labels: ['release']` to the repo's `.github/release-drafter.yml` so the release PR
-itself is not rolled into the next draft.
+The release PR is recognised by its `release/*` branch (not a label), so `release-draft` skips it
+automatically — no `.github/release-drafter.yml` changes needed for that.
 
 ## `release.yml` (single-phase)
 
@@ -79,11 +79,11 @@ For repos whose `main` is protected. Splits the release in two so the `CHANGELOG
 through a PR instead of a direct push:
 
 1. **`release-prepare.yml`** (`workflow_dispatch`) — updates `CHANGELOG.md` on a `release/<tag>`
-   branch and opens a PR to `main` labelled `release`.
+   branch and opens a PR to `main`.
 2. A maintainer **squash-merges** that PR. GitHub creates the squash commit, so it is signed and
    linear — satisfying `required_signatures` / `required_linear_history` rules with no extra work.
-3. **`release-publish.yml`** (`on: pull_request: types: [closed]`, guarded on merge + the `release`
-   label) — optionally builds/attaches assets, then publishes the draft with `target_commitish=main`
+3. **`release-publish.yml`** (`on: pull_request: types: [closed]`, guarded on merge + the `release/*`
+   branch) — optionally builds/attaches assets, then publishes the draft with `target_commitish=main`
    so the tag lands on the merged commit (which now includes the CHANGELOG).
 
 `release-prepare` opens the PR with a **fine-grained PAT** (`RELEASE_TOKEN`), not `GITHUB_TOKEN` —
@@ -114,7 +114,7 @@ jobs:
   publish:
     if: >-
       github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'release')
+      startsWith(github.event.pull_request.head.ref, 'release/')
     uses: edalzell/github-workflows/.github/workflows/release-publish.yml@<sha> # v1.x.y
     permissions:
       contents: write
@@ -131,8 +131,8 @@ to create and approve pull requests" setting (which also lets Actions *approve* 
   token owned by `edalzell` for the `edalzell` repos and one owned by `transformstudios` for the org
   repos — same secret name (`RELEASE_TOKEN`), different value. (Orgs must permit fine-grained PATs.)
 - **Repository access:** only the repos that use the PR-gated flow.
-- **Permissions → Repository:** **Contents: Read and write**, **Issues: Read and write** (for the
-  `release` label), **Pull requests: Read and write**. Nothing else.
+- **Permissions → Repository:** **Contents: Read and write**, **Pull requests: Read and write**.
+  Nothing else.
 - **Expiration:** pick a length and set a calendar reminder to renew. When it lapses, `release-prepare`
   fails at the push/PR step with `Bad credentials (HTTP 401)` (GitHub also emails you ~7 days before).
 
