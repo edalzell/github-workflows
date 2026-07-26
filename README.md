@@ -86,10 +86,9 @@ through a PR instead of a direct push:
    label) — optionally builds/attaches assets, then publishes the draft with `target_commitish=main`
    so the tag lands on the merged commit (which now includes the CHANGELOG).
 
-`release-prepare` opens the PR with a **GitHub App token**, not `GITHUB_TOKEN` — so you do **not**
-enable the repo-wide "Allow GitHub Actions to create and approve pull requests" setting. See
-[GitHub App setup](#github-app-setup) for the one-time App + secrets. The caller passes the App's
-credentials as secrets:
+`release-prepare` opens the PR with a **fine-grained PAT** (`RELEASE_TOKEN`), not `GITHUB_TOKEN` —
+so you do **not** enable the repo-wide "Allow GitHub Actions to create and approve pull requests"
+setting. See [Release token](#release-token) for the one-time setup. The caller passes it as a secret:
 
 ```yaml
 # .github/workflows/release-prepare.yml
@@ -102,8 +101,7 @@ jobs:
     permissions:
       contents: write
     secrets:
-      app_id: ${{ secrets.RELEASE_APP_ID }}
-      app_private_key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      release_token: ${{ secrets.RELEASE_TOKEN }}
 ```
 
 ```yaml
@@ -122,34 +120,30 @@ jobs:
       contents: write
 ```
 
-## GitHub App setup
+## Release token
 
-The PR-gated flow needs to open a PR from a workflow. Rather than enable the repo-wide "Allow
-GitHub Actions to create and approve pull requests" setting (which also lets Actions *approve* PRs),
-`release-prepare` uses a **GitHub App** token scoped to the one repo, minted fresh each run and
-expiring in an hour.
+The PR-gated flow opens a PR from a workflow. Rather than enable the repo-wide "Allow GitHub Actions
+to create and approve pull requests" setting (which also lets Actions *approve* PRs),
+`release-prepare` uses a **fine-grained personal access token** stored as the `RELEASE_TOKEN` secret.
 
-**One-time, create the App** (Settings → Developer settings → GitHub Apps → New GitHub App):
-- Permissions → Repository: **Contents: Read and write**, **Pull requests: Read and write**. Nothing else.
-- Uncheck **Webhook → Active** (not needed).
-- Where can it be installed: since the callers span two owners (`edalzell` and `transformstudios`),
-  choose **"Any account"** so one App can install on both. (Pick "Only on this account" if you'll
-  only ever use it on that one owner's repos, or create a separate App per owner.)
-- Create it, then **Generate a private key** (downloads a `.pem`) and note the **App ID**.
-- **Install** the App (left sidebar → Install App) on each account/org, selecting the repos that
-  will use the PR-gated flow.
+**Create the token** (Settings → Developer settings → Personal access tokens → Fine-grained tokens):
+- **Resource owner:** the account/org that owns the repos. A token belongs to **one** owner, so use a
+  token owned by `edalzell` for the `edalzell` repos and one owned by `transformstudios` for the org
+  repos — same secret name (`RELEASE_TOKEN`), different value. (Orgs must permit fine-grained PATs.)
+- **Repository access:** only the repos that use the PR-gated flow.
+- **Permissions → Repository:** **Contents: Read and write**, **Issues: Read and write** (for the
+  `release` label), **Pull requests: Read and write**. Nothing else.
+- **Expiration:** pick a length and set a calendar reminder to renew. When it lapses, `release-prepare`
+  fails at the push/PR step with `Bad credentials (HTTP 401)` (GitHub also emails you ~7 days before).
 
-**Per repo** (or per org, for org-owned repos), add two Actions secrets:
-- `RELEASE_APP_ID` — the App ID.
-- `RELEASE_APP_PRIVATE_KEY` — the full contents of the `.pem`.
+**Add it as a secret** on each repo (or once as an org secret for org-owned repos):
 
 ```bash
-gh secret set RELEASE_APP_ID          --repo <owner>/<repo> --body "123456"
-gh secret set RELEASE_APP_PRIVATE_KEY --repo <owner>/<repo> < app-private-key.pem
+gh secret set RELEASE_TOKEN --repo <owner>/<repo> --body "<token>"
 ```
 
-The App only grants Contents + Pull requests write on the repos it's installed on, and it cannot
-approve PRs — so it doesn't weaken review gates the way the account-wide setting would.
+The token only grants those three permissions on the selected repos and cannot approve PRs — so it
+doesn't weaken review gates the way the account-wide setting would.
 
 ## Inputs (asset-shipping repos)
 

@@ -4,9 +4,10 @@ name: Release Prepare
 # direct pushes. Updates CHANGELOG.md on a `release/<tag>` branch and opens a labelled PR to main.
 # A maintainer then reviews and squash-merges it, which triggers release-publish.yml.
 #
-# The PR is opened with a GitHub App token (not GITHUB_TOKEN), so the repo does NOT need the
-# "Allow GitHub Actions to create and approve pull requests" setting turned on. The caller passes
-# the App's id and private key as secrets:
+# The branch push and PR use a fine-grained PAT (secret `release_token`), NOT GITHUB_TOKEN — so the
+# repo does not need the "Allow GitHub Actions to create and approve pull requests" setting. The
+# token has an expiry: renew it before then, or this workflow fails at the push/PR step with
+# `Bad credentials (HTTP 401)`. See the README "Release token" section.
 #
 #   jobs:
 #     prepare:
@@ -14,17 +15,13 @@ name: Release Prepare
 #       permissions:
 #         contents: write
 #       secrets:
-#         app_id: ${{ secrets.RELEASE_APP_ID }}
-#         app_private_key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+#         release_token: ${{ secrets.RELEASE_TOKEN }}
 
 on:
   workflow_call:
     secrets:
-      app_id:
-        description: ID of a GitHub App (Contents + Pull requests write) installed on the repo
-        required: true
-      app_private_key:
-        description: Private key (PEM) for that GitHub App
+      release_token:
+        description: Fine-grained PAT (Contents + Issues + Pull requests write) used to open the release PR
         required: true
 
 jobs:
@@ -33,23 +30,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Mint app token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.app_id }}
-          private-key: ${{ secrets.app_private_key }}
-
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Use the App token so the branch push and PR come from the App, not github-actions[bot].
-          token: ${{ steps.app-token.outputs.token }}
+          # Use the release token so the branch push and PR come from it, not github-actions[bot].
+          token: ${{ secrets.release_token }}
 
       - name: Get draft release
         id: draft
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.release_token }}
         run: |
           # The releases endpoint returns newest first, so the first draft is the latest.
           draft=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq 'map(select(.draft))[0]')
@@ -74,7 +64,7 @@ jobs:
 
       - name: Open release PR
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.release_token }}
           TAG: ${{ steps.draft.outputs.tag_name }}
           BODY: ${{ steps.draft.outputs.body }}
         run: |
