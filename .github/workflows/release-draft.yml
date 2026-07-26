@@ -1,0 +1,34 @@
+name: Release Draft
+
+# Reusable: keeps a package repo's draft release current as labelled PRs merge. Skips the release
+# PR itself (handled by Release Publish) so it never races an immutable, already-published release.
+# Each caller still provides its own .github/release-drafter.yml config.
+#
+#   on:
+#     pull_request:
+#       types: [closed]
+#   jobs:
+#     draft:
+#       uses: edalzell/github-workflows/.github/workflows/release-draft.yml@<sha> # v1.x.y
+#       permissions:
+#         contents: write
+#         pull-requests: write
+
+on:
+  workflow_call:
+
+jobs:
+  draft:
+    # Skip the release PR: Release Publish has already published (and made immutable) that version,
+    # so a drafter update would fail trying to change an immutable release.
+    if: >-
+      github.event.pull_request.merged == true &&
+      !contains(github.event.pull_request.labels.*.name, 'release')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: release-drafter/release-drafter@eada3c96a64734dd381cfbda23511034e328ddb0 # v7.6.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

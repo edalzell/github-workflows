@@ -1,0 +1,42 @@
+name: Tag Release
+
+# Releases THIS repo (the shared workflows). Pick a version; it tags the current commit on the
+# default branch and publishes a GitHub Release with generated notes. Callers pin a SHA with the
+# version in a comment, and Dependabot bumps them when a new version tag appears here.
+#
+# No checkout or third-party actions — just gh against the API, so there's nothing here to pin
+# or keep updated.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: New version tag (e.g. v1.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency: tag-release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must look like v1.2.3 (got: $VERSION)" >&2
+            exit 1
+          fi
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$VERSION already exists" >&2
+            exit 1
+          fi
+          # Creates the tag at the current commit and publishes the release in one call.
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "$VERSION" --generate-notes
