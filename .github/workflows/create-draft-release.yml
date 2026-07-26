@@ -9,7 +9,11 @@ on:
 
 jobs:
   update_release_draft:
-    if: github.event.pull_request.merged == true
+    # Skip the release PR itself: Cut Release Publish has already published (and made immutable)
+    # that version, so a drafter update would fail trying to change an immutable release.
+    if: >-
+      github.event.pull_request.merged == true &&
+      !contains(github.event.pull_request.labels.*.name, 'release')
     runs-on: ubuntu-latest
     permissions:
       contents: write
