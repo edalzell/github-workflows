@@ -4,30 +4,42 @@ name: Release Prepare
 # direct pushes. Updates CHANGELOG.md on a `release/<tag>` branch and opens a labelled PR to main.
 # A maintainer then reviews and squash-merges it, which triggers release-publish.yml.
 #
+# The branch push and PR use a fine-grained PAT (secret `release_token`), NOT GITHUB_TOKEN — so the
+# repo does not need the "Allow GitHub Actions to create and approve pull requests" setting. The
+# token has an expiry: renew it before then, or this workflow fails at the push/PR step with
+# `Bad credentials (HTTP 401)`. See the README "Release token" section.
+#
 #   jobs:
 #     prepare:
-#       uses: edalzell/github-workflows/.github/workflows/release-prepare.yml@<sha> # v1
+#       uses: edalzell/github-workflows/.github/workflows/release-prepare.yml@<sha> # v1.x.y
 #       permissions:
 #         contents: write
-#         pull-requests: write
+#       secrets:
+#         release_token: ${{ secrets.RELEASE_TOKEN }}
 
 on:
   workflow_call:
+    secrets:
+      release_token:
+        description: Fine-grained PAT (Contents + Issues + Pull requests write) used to open the release PR
+        required: true
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Use the release token so the branch push and PR come from it, not github-actions[bot].
+          token: ${{ secrets.release_token }}
 
       - name: Get draft release
         id: draft
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.release_token }}
         run: |
           # The releases endpoint returns newest first, so the first draft is the latest.
           draft=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq 'map(select(.draft))[0]')
@@ -52,7 +64,7 @@ jobs:
 
       - name: Open release PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.release_token }}
           TAG: ${{ steps.draft.outputs.tag_name }}
           BODY: ${{ steps.draft.outputs.body }}
         run: |

@@ -86,6 +86,10 @@ through a PR instead of a direct push:
    label) — optionally builds/attaches assets, then publishes the draft with `target_commitish=main`
    so the tag lands on the merged commit (which now includes the CHANGELOG).
 
+`release-prepare` opens the PR with a **fine-grained PAT** (`RELEASE_TOKEN`), not `GITHUB_TOKEN` —
+so you do **not** enable the repo-wide "Allow GitHub Actions to create and approve pull requests"
+setting. See [Release token](#release-token) for the one-time setup. The caller passes it as a secret:
+
 ```yaml
 # .github/workflows/release-prepare.yml
 name: Release Prepare
@@ -96,7 +100,8 @@ jobs:
     uses: edalzell/github-workflows/.github/workflows/release-prepare.yml@<sha> # v1.x.y
     permissions:
       contents: write
-      pull-requests: write
+    secrets:
+      release_token: ${{ secrets.RELEASE_TOKEN }}
 ```
 
 ```yaml
@@ -114,6 +119,31 @@ jobs:
     permissions:
       contents: write
 ```
+
+## Release token
+
+The PR-gated flow opens a PR from a workflow. Rather than enable the repo-wide "Allow GitHub Actions
+to create and approve pull requests" setting (which also lets Actions *approve* PRs),
+`release-prepare` uses a **fine-grained personal access token** stored as the `RELEASE_TOKEN` secret.
+
+**Create the token** (Settings → Developer settings → Personal access tokens → Fine-grained tokens):
+- **Resource owner:** the account/org that owns the repos. A token belongs to **one** owner, so use a
+  token owned by `edalzell` for the `edalzell` repos and one owned by `transformstudios` for the org
+  repos — same secret name (`RELEASE_TOKEN`), different value. (Orgs must permit fine-grained PATs.)
+- **Repository access:** only the repos that use the PR-gated flow.
+- **Permissions → Repository:** **Contents: Read and write**, **Issues: Read and write** (for the
+  `release` label), **Pull requests: Read and write**. Nothing else.
+- **Expiration:** pick a length and set a calendar reminder to renew. When it lapses, `release-prepare`
+  fails at the push/PR step with `Bad credentials (HTTP 401)` (GitHub also emails you ~7 days before).
+
+**Add it as a secret** on each repo (or once as an org secret for org-owned repos):
+
+```bash
+gh secret set RELEASE_TOKEN --repo <owner>/<repo> --body "<token>"
+```
+
+The token only grants those three permissions on the selected repos and cannot approve PRs — so it
+doesn't weaken review gates the way the account-wide setting would.
 
 ## Inputs (asset-shipping repos)
 
