@@ -2,7 +2,7 @@ name: Release Draft
 
 # Reusable: keeps a package repo's draft release current as PRs merge. Skips the release PR itself
 # (recognised by its release/* branch, handled by Release Publish) so it never races an immutable,
-# already-published release. Each caller still provides its own .github/release-drafter.yml config.
+# already-published release. Drafter config is this repo's `.github/release-drafter.yml` (transformstudios, edalzell, and silentzco).
 #
 #   on:
 #     pull_request:
@@ -30,5 +30,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: release-drafter/release-drafter@eada3c96a64734dd381cfbda23511034e328ddb0 # v7.6.0
+        with:
+          config-name: edalzell/github-workflows:release-drafter.yml@${{ github.workflow_sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

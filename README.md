@@ -1,9 +1,9 @@
 # github-workflows
 
 Shared [reusable workflows](https://docs.github.com/en/actions/using-workflows/reusing-workflows)
-for the `transformstudios` and `edalzell` packages. This repo is public because the callers span
-two different owners (an org and a user account), and a private reusable workflow can only be
-called from within its own owner.
+and the shared [release-drafter](https://github.com/release-drafter/release-drafter) config for
+`transformstudios`, `edalzell`, and `silentzco` packages. This repo is public because the callers
+span multiple owners, and a private reusable workflow can only be called from within its own owner.
 
 ## Pinning
 
@@ -30,8 +30,9 @@ Every package repo wires up **Release Draft** plus one release flow:
 | Release — `main` not protected | `release.yml` (single-phase) | manual |
 | Release — `main` protected by a ruleset | `release-prepare.yml` + `release-publish.yml` (PR-gated) | manual + PR merge |
 
-The release flow reads the draft release for the version and notes. Each repo still provides its own
-`.github/release-drafter.yml` config.
+The release flow reads the draft release for the version and notes. Drafter config is
+[`.github/release-drafter.yml`](.github/release-drafter.yml) in **this** repo; callers must not add
+their own copy.
 
 ## `release-draft.yml` (all repos)
 
@@ -54,7 +55,8 @@ jobs:
 ```
 
 The release PR is recognised by its `release/*` branch (not a label), so `release-draft` skips it
-automatically — no `.github/release-drafter.yml` changes needed for that.
+automatically. `release-draft` loads this repo's `.github/release-drafter.yml` via `config-name`
+pinned to `${{ github.workflow_sha }}`, so config and workflow stay on the same commit.
 
 ## `release.yml` (single-phase)
 
