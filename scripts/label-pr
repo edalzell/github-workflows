@@ -1,0 +1,115 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Label a PR from branch-name patterns.
+ *
+ * Duplicates TimonVS/pr-labeler-action
+ * (https://github.com/TimonVS/pr-labeler-action) so we can load config from this
+ * shared repo. That action only reads `.github/pr-labeler.yml` from the *caller*
+ * repository via the GitHub API.
+ *
+ * Env:
+ *   HEAD_REF   — PR head branch (github.head_ref)
+ *   PR_NUMBER  — pull request number
+ *   GH_TOKEN   — token with pull-requests: write (set by the workflow)
+ *
+ * Usage:
+ *   php scripts/label-pr [--config=.github/pr-labeler.yml]
+ */
+
+declare(strict_types=1);
+
+$configPath = '.github/pr-labeler.yml';
+
+foreach (array_slice($argv, 1) as $arg) {
+    if (str_starts_with($arg, '--config=')) {
+        $configPath = substr($arg, strlen('--config='));
+    }
+}
+
+$branch = getenv('HEAD_REF');
+$pr = getenv('PR_NUMBER');
+
+if ($branch === false || $branch === '' || $pr === false || $pr === '') {
+    fwrite(STDERR, "HEAD_REF and PR_NUMBER are required\n");
+    exit(1);
+}
+
+if (! is_readable($configPath)) {
+    fwrite(STDERR, "Config not readable: {$configPath}\n");
+    exit(1);
+}
+
+$config = loadLabelerConfig($configPath);
+$labels = [];
+
+foreach ($config as $label => $patterns) {
+    if (is_string($patterns)) {
+        $patterns = [$patterns];
+    }
+
+    foreach ($patterns as $pattern) {
+        if (fnmatch($pattern, $branch)) {
+            $labels[] = $label;
+            break;
+        }
+    }
+}
+
+if ($labels === []) {
+    echo "No label matched branch {$branch}\n";
+    exit(0);
+}
+
+$labelList = implode(',', $labels);
+$cmd = ['gh', 'pr', 'edit', $pr, '--add-label', $labelList];
+echo 'Running: '.implode(' ', $cmd)."\n";
+
+$descriptorSpec = [STDIN, STDOUT, STDERR];
+$process = proc_open($cmd, $descriptorSpec, $pipes);
+if (! is_resource($process)) {
+    fwrite(STDERR, "Failed to start gh\n");
+    exit(1);
+}
+
+exit(proc_close($process));
+
+/**
+ * Minimal loader for our pr-labeler.yml shape only:
+ *   chore: 'chore/*'
+ *   feature: ['feature/*', 'feat/*']
+ *
+ * @return array<string, string|list<string>>
+ */
+function loadLabelerConfig(string $path): array
+{
+    $config = [];
+
+    foreach (file($path, FILE_IGNORE_NEW_LINES) as $line) {
+        $line = trim($line);
+
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+
+        if (! preg_match('/^([A-Za-z0-9_-]+):\s*(.+)$/', $line, $matches)) {
+            fwrite(STDERR, "Unrecognized config line: {$line}\n");
+            exit(1);
+        }
+
+        $key = $matches[1];
+        $value = trim($matches[2]);
+
+        if (str_starts_with($value, '[')) {
+            $inside = trim($value, '[]');
+            $parts = $inside === '' ? [] : str_getcsv($inside, ',', "'", '\\');
+            $config[$key] = array_values(array_filter(array_map('trim', $parts), fn (string $p) => $p !== ''));
+            continue;
+        }
+
+        $config[$key] = trim($value, " \t'\"");
+    }
+
+    return $config;
+}

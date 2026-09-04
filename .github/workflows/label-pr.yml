@@ -1,9 +1,9 @@
 name: PR Labeler
 
 # Reusable: labels opened PRs from branch name patterns. Config is this repo's
-# `.github/pr-labeler.yml` (transformstudios, edalzell, and silentzco). The
-# upstream action only reads config from the *caller* repo, so this workflow
-# fetches the shared file and applies labels itself.
+# `.github/pr-labeler.yml` (transformstudios, edalzell, and silentzco).
+# Implementation: scripts/label-pr (duplicates TimonVS/pr-labeler-action so we
+# can load that shared config — the upstream action only reads the caller repo).
 #
 #   on:
 #     pull_request:
@@ -25,38 +25,20 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Apply labels from shared config
+      - name: Checkout shared labeler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: edalzell/github-workflows
+          # Bump with the same release that ships this workflow (see release-draft config-name).
+          ref: v1.3.0
+          sparse-checkout: |
+            scripts/label-pr
+            .github/pr-labeler.yml
+          path: _github-workflows
+
+      - name: Apply labels
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.head_ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          # Bump with the same release that ships this workflow (see release-draft config-name).
-          CONFIG_REF: v1.3.0
-        run: |
-          set -euo pipefail
-          python3 -m pip install --quiet pyyaml
-          CONFIG=$(gh api "repos/edalzell/github-workflows/contents/.github/pr-labeler.yml?ref=${CONFIG_REF}" --jq .content | base64 -d)
-          export CONFIG HEAD_REF PR_NUMBER
-          python3 <<'PY'
-          import fnmatch
-          import os
-          import subprocess
-
-          import yaml
-
-          config = yaml.safe_load(os.environ["CONFIG"])
-          branch = os.environ["HEAD_REF"]
-          pr = os.environ["PR_NUMBER"]
-          labels = []
-          for label, patterns in config.items():
-              if isinstance(patterns, str):
-                  patterns = [patterns]
-              if any(fnmatch.fnmatch(branch, pattern) for pattern in patterns):
-                  labels.append(label)
-          if not labels:
-              print(f"No label matched branch {branch!r}")
-              raise SystemExit(0)
-          cmd = ["gh", "pr", "edit", pr, "--add-label", ",".join(labels)]
-          print("Running:", " ".join(cmd))
-          subprocess.check_call(cmd)
-          PY
+        run: php _github-workflows/scripts/label-pr --config=_github-workflows/.github/pr-labeler.yml

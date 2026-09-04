@@ -40,7 +40,9 @@ copies.
 ## `label-pr.yml` (all repos)
 
 Labels opened PRs from branch name patterns (`feature/*` → `feature`, etc.) using the shared
-`.github/pr-labeler.yml`. Callers drop both their workflow body and local `pr-labeler.yml`.
+`.github/pr-labeler.yml`. Logic lives in [`scripts/label-pr`](scripts/label-pr) (same behavior as
+[TimonVS/pr-labeler-action](https://github.com/TimonVS/pr-labeler-action), which can only read
+config from the caller repo). Callers drop both their workflow body and local `pr-labeler.yml`.
 
 ```yaml
 # .github/workflows/label-pr.yml
@@ -56,8 +58,8 @@ jobs:
       pull-requests: write
 ```
 
-Bump `CONFIG_REF` inside `label-pr.yml` in the same release that cuts the new version tag (same
-pattern as release-draft's `config-name` tag).
+Bump the `ref: vX.Y.Z` inside `label-pr.yml` (checkout of this repo) in the same release that cuts
+the new version tag — same pattern as release-draft's `config-name` tag.
 
 ## `release-draft.yml` (all repos)
 
