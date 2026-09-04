@@ -30,7 +30,7 @@ jobs:
         with:
           repository: edalzell/github-workflows
           # Bump with the same release that ships this workflow (see release-draft config-name).
-          ref: v1.3.0
+          ref: v1.3.1
           sparse-checkout: |
             scripts/label-pr
             .github/pr-labeler.yml
@@ -41,4 +41,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.head_ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: php _github-workflows/scripts/label-pr --config=_github-workflows/.github/pr-labeler.yml
