@@ -56,7 +56,9 @@ jobs:
 
 The release PR is recognised by its `release/*` branch (not a label), so `release-draft` skips it
 automatically. `release-draft` loads this repo's `.github/release-drafter.yml` via `config-name`
-pinned to `${{ github.workflow_sha }}`, so config and workflow stay on the same commit.
+pinned to the matching release tag (e.g. `@v1.2.1`). Do not use `github.workflow_sha` — in a
+reusable workflow that is the *caller* commit, which is not a ref in this repo. Bump the tag in
+`config-name` in the same release that ships the workflow change.
 
 ## `release.yml` (single-phase)
 

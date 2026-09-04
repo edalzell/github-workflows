@@ -31,6 +31,9 @@ jobs:
     steps:
       - uses: release-drafter/release-drafter@eada3c96a64734dd381cfbda23511034e328ddb0 # v7.6.0
         with:
-          config-name: edalzell/github-workflows:release-drafter.yml@${{ github.workflow_sha }}
+          # Pin to this repo's release tag — not github.workflow_sha (that is the *caller*
+          # commit, which does not exist in edalzell/github-workflows).
+          # Bump the tag in the same release that cuts this workflow.
+          config-name: edalzell/github-workflows:release-drafter.yml@v1.2.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
