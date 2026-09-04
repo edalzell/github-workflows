@@ -40,7 +40,7 @@ copies.
 ## `label-pr.yml` (all repos)
 
 Labels opened PRs from branch name patterns (`feature/*` → `feature`, etc.) using the shared
-`.github/pr-labeler.yml`. Logic lives in [`scripts/label-pr`](scripts/label-pr) (same behavior as
+`.github/pr-labeler.yml`. Logic lives in [`scripts/label-pr`](scripts/label-pr) (PHP; same behavior as
 [TimonVS/pr-labeler-action](https://github.com/TimonVS/pr-labeler-action), which can only read
 config from the caller repo). Callers drop both their workflow body and local `pr-labeler.yml`.
 
