@@ -10,9 +10,10 @@
  * repository via the GitHub API.
  *
  * Env:
- *   HEAD_REF   — PR head branch (github.head_ref)
- *   PR_NUMBER  — pull request number
- *   GH_TOKEN   — token with pull-requests: write (set by the workflow)
+ *   HEAD_REF            — PR head branch (github.head_ref)
+ *   PR_NUMBER           — pull request number
+ *   GITHUB_REPOSITORY   — owner/repo for the caller (always set in Actions)
+ *   GH_TOKEN            — token with pull-requests: write (set by the workflow)
  *
  * Usage:
  *   php scripts/label-pr [--config=.github/pr-labeler.yml]
@@ -30,9 +31,15 @@ foreach (array_slice($argv, 1) as $arg) {
 
 $branch = getenv('HEAD_REF');
 $pr = getenv('PR_NUMBER');
+$repo = getenv('GITHUB_REPOSITORY');
 
 if ($branch === false || $branch === '' || $pr === false || $pr === '') {
     fwrite(STDERR, "HEAD_REF and PR_NUMBER are required\n");
+    exit(1);
+}
+
+if ($repo === false || $repo === '') {
+    fwrite(STDERR, "GITHUB_REPOSITORY is required (caller owner/repo)\n");
     exit(1);
 }
 
@@ -63,7 +70,9 @@ if ($labels === []) {
 }
 
 $labelList = implode(',', $labels);
-$cmd = ['gh', 'pr', 'edit', $pr, '--add-label', $labelList];
+// --repo is required: this job only checks out github-workflows, so gh cannot
+// infer the caller repository from a local .git directory.
+$cmd = ['gh', 'pr', 'edit', $pr, '--repo', $repo, '--add-label', $labelList];
 echo 'Running: '.implode(' ', $cmd)."\n";
 
 $descriptorSpec = [STDIN, STDOUT, STDERR];
