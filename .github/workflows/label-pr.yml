@@ -1,0 +1,44 @@
+name: PR Labeler
+
+# Reusable: labels opened PRs from branch name patterns. Config is this repo's
+# `.github/pr-labeler.yml` (transformstudios, edalzell, and silentzco).
+# Implementation: scripts/label-pr (duplicates TimonVS/pr-labeler-action so we
+# can load that shared config — the upstream action only reads the caller repo).
+#
+#   on:
+#     pull_request:
+#       types: [opened]
+#   jobs:
+#     label:
+#       uses: edalzell/github-workflows/.github/workflows/label-pr.yml@<sha> # v1.x.y
+#       permissions:
+#         contents: read
+#         pull-requests: write
+
+on:
+  workflow_call:
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout shared labeler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: edalzell/github-workflows
+          # Bump with the same release that ships this workflow (see release-draft config-name).
+          ref: v1.3.0
+          sparse-checkout: |
+            scripts/label-pr
+            .github/pr-labeler.yml
+          path: _github-workflows
+
+      - name: Apply labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: php _github-workflows/scripts/label-pr --config=_github-workflows/.github/pr-labeler.yml

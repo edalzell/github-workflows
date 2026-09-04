@@ -1,9 +1,10 @@
 # github-workflows
 
 Shared [reusable workflows](https://docs.github.com/en/actions/using-workflows/reusing-workflows)
-and the shared [release-drafter](https://github.com/release-drafter/release-drafter) config for
-`transformstudios`, `edalzell`, and `silentzco` packages. This repo is public because the callers
-span multiple owners, and a private reusable workflow can only be called from within its own owner.
+plus shared [release-drafter](https://github.com/release-drafter/release-drafter) and PR-labeler
+config for `transformstudios`, `edalzell`, and `silentzco` packages. This repo is public because
+the callers span multiple owners, and a private reusable workflow can only be called from within
+its own owner.
 
 ## Pinning
 
@@ -22,17 +23,43 @@ Do not reference a moving major tag like `@v1` — nothing here resolves one.
 
 ## Which workflow to use
 
-Every package repo wires up **Release Draft** plus one release flow:
+Every package repo wires up **PR Labeler**, **Release Draft**, plus one release flow:
 
 | Piece | Workflow(s) | Trigger |
 | --- | --- | --- |
+| Label PRs from branch prefixes | `label-pr.yml` | PR opened |
 | Keep the draft release current | `release-draft.yml` | every merged PR |
 | Release — `main` not protected | `release.yml` (single-phase) | manual |
 | Release — `main` protected by a ruleset | `release-prepare.yml` + `release-publish.yml` (PR-gated) | manual + PR merge |
 
-The release flow reads the draft release for the version and notes. Drafter config is
-[`.github/release-drafter.yml`](.github/release-drafter.yml) in **this** repo; callers must not add
-their own copy.
+The release flow reads the draft release for the version and notes. Drafter and labeler configs are
+[`.github/release-drafter.yml`](.github/release-drafter.yml) and
+[`.github/pr-labeler.yml`](.github/pr-labeler.yml) in **this** repo; callers must not add their own
+copies.
+
+## `label-pr.yml` (all repos)
+
+Labels opened PRs from branch name patterns (`feature/*` → `feature`, etc.) using the shared
+`.github/pr-labeler.yml`. Logic lives in [`scripts/label-pr`](scripts/label-pr) (PHP; same behavior as
+[TimonVS/pr-labeler-action](https://github.com/TimonVS/pr-labeler-action), which can only read
+config from the caller repo). Callers drop both their workflow body and local `pr-labeler.yml`.
+
+```yaml
+# .github/workflows/label-pr.yml
+name: PR Labeler
+on:
+  pull_request:
+    types: [opened]
+jobs:
+  label:
+    uses: edalzell/github-workflows/.github/workflows/label-pr.yml@<sha> # v1.x.y
+    permissions:
+      contents: read
+      pull-requests: write
+```
+
+Bump the `ref: vX.Y.Z` inside `label-pr.yml` (checkout of this repo) in the same release that cuts
+the new version tag — same pattern as release-draft's `config-name` tag.
 
 ## `release-draft.yml` (all repos)
 
