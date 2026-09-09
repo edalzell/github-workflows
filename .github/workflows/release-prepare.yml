@@ -1,8 +1,9 @@
 name: Release Prepare
 
-# Phase 1 of the PR-gated release, for repos whose `main` is protected by a ruleset that forbids
-# direct pushes. Updates CHANGELOG.md on a `release/<tag>` branch and opens a labelled PR to main.
-# A maintainer then reviews and squash-merges it, which triggers release-publish.yml.
+# Phase 1 of the PR-gated release, for repos whose default/release branch is protected by a ruleset
+# that forbids direct pushes. Updates CHANGELOG.md on a `release/<tag>` branch and opens a PR to
+# the branch the draft release targets (e.g. `main` or `6.x`). A maintainer then squash-merges it,
+# which triggers release-publish.yml.
 #
 # The branch push and PR use a fine-grained PAT (secret `release_token`), NOT GITHUB_TOKEN — so the
 # repo does not need the "Allow GitHub Actions to create and approve pull requests" setting. The
@@ -16,9 +17,20 @@ name: Release Prepare
 #         contents: write
 #       secrets:
 #         release_token: ${{ secrets.RELEASE_TOKEN }}
+#       # optional:
+#       with:
+#         base_branch: 6.x   # override; default is the draft's target_commitish
 
 on:
   workflow_call:
+    inputs:
+      base_branch:
+        description: >-
+          Branch to release from and open the changelog PR against. Empty (default) uses the draft
+          release's target_commitish (refs/heads/ stripped). Falls back to main if that is empty.
+        type: string
+        required: false
+        default: ""
     secrets:
       release_token:
         description: Fine-grained PAT (Contents + Pull requests write) used to open the release PR
@@ -30,16 +42,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # Use the release token so the branch push and PR come from it, not github-actions[bot].
-          token: ${{ secrets.release_token }}
-
       - name: Get draft release
         id: draft
         env:
           GH_TOKEN: ${{ secrets.release_token }}
+          BASE_OVERRIDE: ${{ inputs.base_branch }}
         run: |
           # The releases endpoint returns newest first, so the first draft is the latest.
           draft=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq 'map(select(.draft))[0]')
@@ -56,6 +63,26 @@ jobs:
             echo "${delim}"
           } >> "$GITHUB_OUTPUT"
 
+          if [ -n "$BASE_OVERRIDE" ]; then
+            base="$BASE_OVERRIDE"
+          else
+            raw=$(jq -r '.target_commitish // empty' <<<"$draft")
+            base="${raw#refs/heads/}"
+            # Drafter uses a branch name; a bare commit SHA is not a valid PR base.
+            if [ -z "$base" ] || [[ "$base" =~ ^[0-9a-f]{40}$ ]]; then
+              base=main
+            fi
+          fi
+          echo "base_branch=${base}" >> "$GITHUB_OUTPUT"
+          echo "Releasing from base branch: ${base}"
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Use the release token so the branch push and PR come from it, not github-actions[bot].
+          token: ${{ secrets.release_token }}
+          ref: ${{ steps.draft.outputs.base_branch }}
+
       - name: Update changelog
         uses: stefanzweifel/changelog-updater-action@a938690fad7edf25368f37e43a1ed1b34303eb36 # v1.12.0
         with:
@@ -67,6 +94,7 @@ jobs:
           GH_TOKEN: ${{ secrets.release_token }}
           TAG: ${{ steps.draft.outputs.tag_name }}
           BODY: ${{ steps.draft.outputs.body }}
+          BASE: ${{ steps.draft.outputs.base_branch }}
         run: |
           if git diff --quiet -- CHANGELOG.md; then
             echo "CHANGELOG.md unchanged — nothing to release" >&2
@@ -82,6 +110,6 @@ jobs:
           printf '%s\n' "$BODY" > /tmp/pr-body.md
           # Release Publish recognises this PR by its release/* branch, so no label is needed
           # (which also means the token needs no Issues permission).
-          gh pr create --base main --head "$branch" \
+          gh pr create --base "$BASE" --head "$branch" \
             --title "Release ${TAG}" \
             --body-file /tmp/pr-body.md

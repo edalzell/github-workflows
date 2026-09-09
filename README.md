@@ -30,7 +30,7 @@ Every package repo wires up **PR Labeler**, **Release Draft**, plus one release 
 | Label PRs from branch prefixes | `label-pr.yml` | PR opened |
 | Keep the draft release current | `release-draft.yml` | every merged PR |
 | Release — `main` not protected | `release.yml` (single-phase) | manual |
-| Release — `main` protected by a ruleset | `release-prepare.yml` + `release-publish.yml` (PR-gated) | manual + PR merge |
+| Release — branch protected by a ruleset | `release-prepare.yml` + `release-publish.yml` (PR-gated) | manual + PR merge |
 
 The release flow reads the draft release for the version and notes. Drafter and labeler configs are
 [`.github/release-drafter.yml`](.github/release-drafter.yml) and
@@ -106,16 +106,21 @@ jobs:
 
 ## `release-prepare.yml` + `release-publish.yml` (PR-gated)
 
-For repos whose `main` is protected. Splits the release in two so the `CHANGELOG.md` change goes
-through a PR instead of a direct push:
+For repos whose release branch is protected. Splits the release in two so the `CHANGELOG.md` change
+goes through a PR instead of a direct push:
 
 1. **`release-prepare.yml`** (`workflow_dispatch`) — updates `CHANGELOG.md` on a `release/<tag>`
-   branch and opens a PR to `main`.
+   branch and opens a PR to the **base branch** (see below).
 2. A maintainer **squash-merges** that PR. GitHub creates the squash commit, so it is signed and
    linear — satisfying `required_signatures` / `required_linear_history` rules with no extra work.
 3. **`release-publish.yml`** (`on: pull_request: types: [closed]`, guarded on merge + the `release/*`
-   branch) — optionally builds/attaches assets, then publishes the draft with `target_commitish=main`
-   so the tag lands on the merged commit (which now includes the CHANGELOG).
+   branch) — optionally builds/attaches assets, then publishes the draft with
+   `target_commitish=<PR base>` so the tag lands on the merged commit (which now includes the
+   CHANGELOG), whether that base is `main`, `6.x`, or another line.
+
+**Base branch:** prepare defaults to the draft release's `target_commitish` (Release Drafter sets
+this from the branch PRs merge into — e.g. `refs/heads/6.x` → `6.x`). If that is missing or a bare
+commit SHA, it falls back to `main`. Callers can override with `with: base_branch: …`.
 
 `release-prepare` opens the PR with a **fine-grained PAT** (`RELEASE_TOKEN`), not `GITHUB_TOKEN` —
 so you do **not** enable the repo-wide "Allow GitHub Actions to create and approve pull requests"
@@ -133,6 +138,9 @@ jobs:
       contents: write
     secrets:
       release_token: ${{ secrets.RELEASE_TOKEN }}
+    # optional override when the draft's target_commitish is wrong:
+    # with:
+    #   base_branch: 6.x
 ```
 
 ```yaml
