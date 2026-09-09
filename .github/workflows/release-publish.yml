@@ -2,8 +2,9 @@ name: Release Publish
 
 # Phase 2 of the PR-gated release. Runs when a release/<tag> PR is merged. Optionally builds and
 # attaches a compiled asset bundle, then flips the draft release to published. Because the release
-# PR is now merged, main's HEAD is the (GitHub-signed) squash commit that includes the CHANGELOG,
-# and `target_commitish=main` makes the tag land on it.
+# PR is now merged, the base branch HEAD is the (GitHub-signed) squash commit that includes the
+# CHANGELOG, and `target_commitish` is set to that PR base (e.g. `main` or `6.x`) so the tag lands
+# on it.
 #
 # The merge + release/* branch guard lives in this workflow, so the caller just wires the trigger:
 #
@@ -93,10 +94,11 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE: ${{ github.event.pull_request.base.ref }}
         run: |
-          # Patch by id; -F sends a JSON boolean. target_commitish=main pins the tag to the merged
-          # commit (which includes the CHANGELOG), not a stale commitish from when the draft was made.
+          # Patch by id; -F sends a JSON boolean. Pin the tag to the PR base branch tip (the squash
+          # merge that includes the CHANGELOG), not a stale commitish from when the draft was made.
           gh api --method PATCH \
             "repos/${GITHUB_REPOSITORY}/releases/${{ steps.draft.outputs.id }}" \
             -F draft=false \
-            -f target_commitish=main
+            -f "target_commitish=${BASE}"
