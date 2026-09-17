@@ -154,7 +154,11 @@ jobs:
     uses: edalzell/github-workflows/.github/workflows/release-publish.yml@<sha> # v1.x.y
     permissions:
       contents: write
+    secrets:
+      release_token: ${{ secrets.RELEASE_TOKEN }}
 ```
+
+Pass `release_token` so publishing uses the PAT instead of `GITHUB_TOKEN`. Events created with `GITHUB_TOKEN` do not start other workflows, so `on: release: published` jobs (Satis rebuilds, etc.) never run without it. Omit the `secrets:` block and publish still works; those downstream workflows stay silent.
 
 The merge + `release/*` branch guard lives inside `release-publish.yml`, so the caller just wires
 the `pull_request` trigger — no `if` needed (same as `release-draft`).
@@ -194,7 +198,7 @@ Both `release.yml` and `release-publish.yml` accept:
 | `composer_install` | `false` | Run `composer install` before the asset build (PHP packages). |
 | `asset_working_dir` | `.` | Directory containing the `dist` folder to tar, relative to the repo root. |
 
-`GITHUB_TOKEN` is passed through automatically; no `secrets:` block is needed.
+`GITHUB_TOKEN` is passed through automatically. Pass `release_token` on `release-publish` when another workflow must run on `release: published`.
 
 ## Releasing this repo
 

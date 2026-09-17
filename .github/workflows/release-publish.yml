@@ -20,9 +20,15 @@ name: Release Publish
 #         upload_assets: true            # only repos that ship a compiled dist/
 #         composer_install: true         # only repos whose asset build needs PHP deps
 #         asset_working_dir: resources    # dir containing the `dist` folder to tar
+#       secrets:
+#         release_token: ${{ secrets.RELEASE_TOKEN }}  # optional; so `release` events fire
 
 on:
   workflow_call:
+    secrets:
+      release_token:
+        description: PAT used to publish the release so `release` events trigger other workflows. GITHUB_TOKEN if omitted.
+        required: false
     inputs:
       upload_assets:
         description: Build a compiled asset bundle and attach it to the release
@@ -93,7 +99,9 @@ jobs:
 
       - name: Publish release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN events do not start other workflows. A PAT does, so callers
+          # that listen for `release: published` (e.g. Satis) must pass release_token.
+          GH_TOKEN: ${{ secrets.release_token || github.token }}
           BASE: ${{ github.event.pull_request.base.ref }}
         run: |
           # Patch by id; -F sends a JSON boolean. Pin the tag to the PR base branch tip (the squash
