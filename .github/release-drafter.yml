@@ -2,41 +2,50 @@ name-template: 'v$RESOLVED_VERSION'
 tag-template: 'v$RESOLVED_VERSION'
 categories:
   - title: '🚀 New'
-    labels:
-      - 'feature'
-      - 'enhancement'
+    when:
+      labels:
+        - 'feature'
+        - 'enhancement'
   - title: '🐛 Fixed'
-    labels:
-      - 'fix'
-      - 'bugfix'
-      - 'bug'
+    when:
+      labels:
+        - 'fix'
+        - 'bugfix'
+        - 'bug'
   - title: '🔧 Improved'
-    labels:
-      - 'change'
-      - 'improve'
-      - 'improvement'
-      - 'sync'
+    when:
+      labels:
+        - 'change'
+        - 'improve'
+        - 'improvement'
+        - 'sync'
   - title: '🧰 Maintenance'
-    label: 'chore'
+    when:
+      label: 'chore'
+  - type: version-resolver
+    semver-increment: major
+    when:
+      label: 'major'
+  - type: version-resolver
+    semver-increment: minor
+    when:
+      labels:
+        - 'feature'
+        - 'enhancement'
+        - 'change'
+        - 'improve'
+        - 'improvement'
+  - type: version-resolver
+    semver-increment: patch
+    when:
+      labels:
+        - 'fix'
+        - 'bugfix'
+        - 'bug'
+        - 'sync'
+  - type: version-resolver
+    semver-increment: patch
 change-template: '- $TITLE [@$AUTHOR](https://github.com/$AUTHOR) (#$NUMBER)'
 change-title-escapes: '\<*_&' # You can add # and @ to disable mentions, and add ` to disable code blocks.
-version-resolver:
-  major:
-    labels:
-      - 'major'
-  minor:
-    labels:
-      - 'feature'
-      - 'enhancement'
-      - 'change'
-      - 'improve'
-      - 'improvement'
-  patch:
-    labels:
-      - 'fix'
-      - 'bugfix'
-      - 'bug'
-      - 'sync'
-  default: patch
 template: |
   $CHANGES
