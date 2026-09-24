@@ -71,7 +71,7 @@ release that `release-publish.yml` just published.
 # .github/workflows/create-draft-release.yml
 name: Release Drafter
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
 jobs:
   draft:
