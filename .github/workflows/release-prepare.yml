@@ -83,11 +83,30 @@ jobs:
           token: ${{ secrets.release_token }}
           ref: ${{ steps.draft.outputs.base_branch }}
 
-      - name: Update changelog
-        uses: stefanzweifel/changelog-updater-action@a938690fad7edf25368f37e43a1ed1b34303eb36 # v1.12.0
+      # CLI, not stefanzweifel/changelog-updater-action: that action is a Docker
+      # build of php:cli-alpine, and Docker Hub 429s the pull from GitHub-hosted runners.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
-          latest-version: ${{ steps.draft.outputs.tag_name }}
-          release-notes: ${{ steps.draft.outputs.body }}
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install changelog-updater
+        run: |
+          composer global require wnx/changelog-updater:1.12.0 --no-interaction --no-progress
+          echo "$(composer global config home)/vendor/bin" >> "$GITHUB_PATH"
+
+      - name: Update changelog
+        env:
+          RELEASE_NOTES: ${{ steps.draft.outputs.body }}
+          LATEST_VERSION: ${{ steps.draft.outputs.tag_name }}
+        run: |
+          changelog-updater update \
+            --release-notes="$RELEASE_NOTES" \
+            --latest-version="$LATEST_VERSION" \
+            --github-actions-output \
+            --write \
+            --no-interaction
 
       - name: Open release PR
         env:
