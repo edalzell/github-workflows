@@ -81,6 +81,11 @@ jobs:
       pull-requests: write
 ```
 
+The trigger must be `pull_request_target`, not `pull_request`: a `pull_request` run for a PR from a
+fork gets a read-only `GITHUB_TOKEN` whatever `permissions:` grants, so creating the draft fails
+with `Resource not accessible by integration`. `pull_request_target` is safe here because the job
+only runs on merged PRs and never checks out PR code.
+
 The release PR is recognised by its `release/*` branch (not a label), so `release-draft` skips it
 automatically. `release-draft` loads this repo's `.github/release-drafter.yml` via `config-name`
 pinned to the matching release tag (e.g. `@v1.2.1`). Do not use `github.workflow_sha` — in a
